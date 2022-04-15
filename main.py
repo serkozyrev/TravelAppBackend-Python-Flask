@@ -207,6 +207,7 @@ def create_place():
 def update_place(pid):
     title = request.json['title']
     description = request.json['description']
+    address = request.json['address']
 
     if title == "" or description == '':
         return 'Invalid inputs passed, please check your data', 422
@@ -226,7 +227,8 @@ def update_place(pid):
         return 'You are not allowed to update this place', 401
 
     with CursorFromConnectionFromPool() as cursor:
-        cursor.execute('update places set title=%s, description=%s where placeid=%s', (title, description, pid))
+        cursor.execute('update places set title=%s, description=%s, address=%s where placeid=%s',
+                       (title, description, address, pid))
 
     return jsonify({'place': place_by_id}, 201)
 
@@ -249,7 +251,7 @@ def delete_place(pid):
         return 'You are not allowed to delete this place', 401
 
     with CursorFromConnectionFromPool() as cursor:
-        cursor.execute('delete from places where userid = %s', (user_id,))
+        cursor.execute('delete from places where placeid = %s', (pid,))
 
     return jsonify({'message': 'Deleted place'})
 
