@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify
 import jwt
 import os
-import requests
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from database import Database
@@ -85,17 +84,17 @@ def signup():
         with CursorFromConnectionFromPool() as cursor:
             cursor.execute(f'insert into users(username, email, userpassword)'
                            f'values(%s, %s, %s)', (name, email_norm, hashed))
-        dt = datetime.now() + timedelta(hours=1)
+        # dt = datetime.now() + timedelta(hours=1)
         with CursorFromConnectionFromPool() as cursor:
             cursor.execute('select * from users where email=%s', (email,))
-            identifiedUser = cursor.fetchone()
+            identified_user = cursor.fetchone()
         payload = {
             'exp': datetime.now() + timedelta(days=1),
             'iat': datetime.now(),
-            'id': identifiedUser[0]
+            'id': identified_user[0]
         }
         access_token = jwt.encode(payload, jwtsecret, algorithm="HS256")
-        return {'userId': identifiedUser[0], 'email': identifiedUser[2], 'token': access_token}
+        return {'userId': identified_user[0], 'email': identified_user[2], 'token': access_token}
 
 
 @app.route('/api/users/login', methods=['POST'])
@@ -115,9 +114,8 @@ def login():
             valid_password = bcrypt.checkpw(password, password1)
         if not valid_password:
             return 'Invalid credentials, could not log you in', 403
-        user_details = {'user_id': identified_user[0], 'username': identified_user[1], 'email': identified_user[2]}
 
-        dt = datetime.now() + timedelta(hours=1)
+        # dt = datetime.now() + timedelta(hours=1)
         payload = {
             'exp': datetime.now() + timedelta(days=1),
             'iat': datetime.now(),
@@ -158,7 +156,7 @@ def get_places_by_user_id(uid):
     print(places_by_user_id)
 
     for place_by_user_id in places_by_user_id:
-        coordinates = {'lat':place_by_user_id[6], 'lng':place_by_user_id[7]}
+        coordinates = {'lat': place_by_user_id[6], 'lng': place_by_user_id[7]}
         place_item = {
             'id': place_by_user_id[0], 'title': place_by_user_id[1], 'description': place_by_user_id[2],
             'image': place_by_user_id[3], 'address': place_by_user_id[4], 'creator': place_by_user_id[5],
@@ -171,7 +169,7 @@ def get_places_by_user_id(uid):
 @app.route('/api/places', methods=['POST'])
 @cross_origin()
 def create_place():
-    data = request.headers['Authorization']
+    # data = request.headers['Authorization']
     title = request.form['title']
     token = request.headers['Authorization'].split(' ')[1]
     if token == '':
@@ -207,7 +205,7 @@ def create_place():
 @app.route('/api/places/<string:pid>', methods=['PATCH'])
 @cross_origin()
 def update_place(pid):
-    title=request.json['title']
+    title = request.json['title']
     description = request.json['description']
 
     if title == "" or description == '':
