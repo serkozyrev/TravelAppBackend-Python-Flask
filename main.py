@@ -22,18 +22,19 @@ DB = os.getenv('DB')
 app = Flask(__name__)
 CORS(app)
 Database.initialize(user=f'{DB_USER}',
-                                            password=f'{DB_PWD}',
-                                            host=f'{DB_HOST}',
-                                            port=5432,
-                                            database=f'{DB}')
+                    password=f'{DB_PWD}',
+                    host=f'{DB_HOST}',
+                    port=5432,
+                    database=f'{DB}')
+
 
 @app.route('/api/users/', methods=['GET'])
 @cross_origin()
-def getUsers():
+def get_users():
     with CursorFromConnectionFromPool() as cursor:
         cursor.execute('select * from users')
         users = cursor.fetchall()
-    user_list =[]
+    user_list = []
 
     for user in users:
         user_tuple_list = list(user)
@@ -48,7 +49,6 @@ def getUsers():
         # user_new = tuple(user_tuple_list)
         user_list.append(user_new)
     return {'users': user_list}
-
 
 
 @app.route('/api/users/signup', methods=['POST'])
@@ -79,7 +79,6 @@ def signup():
         if users:
             return "Could not create user, email already exists", 422
 
-
         salt = bcrypt.gensalt(10)
         hashed = bcrypt.hashpw(password, salt).decode('utf-8')
 
@@ -88,15 +87,15 @@ def signup():
                            f'values(%s, %s, %s)', (name, email_norm, hashed))
         dt = datetime.now() + timedelta(hours=1)
         with CursorFromConnectionFromPool() as cursor:
-                cursor.execute('select * from users where email=%s', (email,))
-                identifiedUser = cursor.fetchone()
+            cursor.execute('select * from users where email=%s', (email,))
+            identifiedUser = cursor.fetchone()
         payload = {
             'exp': datetime.now() + timedelta(days=1),
             'iat': datetime.now(),
             'id': identifiedUser[0]
         }
         access_token = jwt.encode(payload, jwtsecret, algorithm="HS256")
-        return {'userId': identifiedUser[0], 'email':identifiedUser[2], 'token': access_token}
+        return {'userId': identifiedUser[0], 'email': identifiedUser[2], 'token': access_token}
 
 
 @app.route('/api/users/login', methods=['POST'])
@@ -107,16 +106,16 @@ def login():
 
     with CursorFromConnectionFromPool() as cursor:
         cursor.execute('select * from users where email=%s', (email, ))
-        identifiedUser = cursor.fetchone()
-        if identifiedUser is None:
-            return "Could not identify user, credetials seem to be wrong", 401
+        identified_user = cursor.fetchone()
+        if identified_user is None:
+            return "Could not identify user, credentials seem to be wrong", 401
         else:
-            user_id = identifiedUser[0]
-            password1 = identifiedUser[3].encode('utf8')
+            user_id = identified_user[0]
+            password1 = identified_user[3].encode('utf8')
             valid_password = bcrypt.checkpw(password, password1)
         if not valid_password:
             return 'Invalid credentials, could not log you in', 403
-        user_details = {'user_id': identifiedUser[0], 'username': identifiedUser[1], 'email': identifiedUser[2]}
+        user_details = {'user_id': identified_user[0], 'username': identified_user[1], 'email': identified_user[2]}
 
         dt = datetime.now() + timedelta(hours=1)
         payload = {
@@ -125,18 +124,17 @@ def login():
             'id': user_id
         }
         access_token = jwt.encode(payload, jwtsecret, algorithm="HS256")
-        return {'userId': identifiedUser[0], 'email':identifiedUser[2], 'token': access_token}
+        return {'userId': identified_user[0], 'email': identified_user[2], 'token': access_token}
 
 
 @app.route('/api/places/<string:pid>', methods=['GET'])
 @cross_origin()
-def getPlaceById(pid):
+def get_place_by_id(pid):
     with CursorFromConnectionFromPool() as cursor:
         cursor.execute('select * from places where placeid = %s', (pid,))
         place_by_id = cursor.fetchone()
     if not place_by_id:
         return 'Could not find a place for the provided id', 404
-
 
     coordinates = {'lat': place_by_id[6], 'lng': place_by_id[7]}
     place_item = {
@@ -149,7 +147,7 @@ def getPlaceById(pid):
 
 @app.route('/api/places/user/<string:uid>', methods=['GET'])
 @cross_origin()
-def getPlacesByUserId(uid):
+def get_places_by_user_id(uid):
     with CursorFromConnectionFromPool() as cursor:
         cursor.execute('select * from places where userid = %s', (uid,))
         places_by_user_id = cursor.fetchall()
@@ -170,13 +168,12 @@ def getPlacesByUserId(uid):
     return {'places': places_list}
 
 
-
 @app.route('/api/places', methods=['POST'])
 @cross_origin()
-def createPlace():
+def create_place():
     data = request.headers['Authorization']
     title = request.form['title']
-    token=request.headers['Authorization'].split(' ')[1]
+    token = request.headers['Authorization'].split(' ')[1]
     if token == '':
         return 'Authorization failed'
     user_id = auth(token)
@@ -186,7 +183,7 @@ def createPlace():
     if title == '' or description == '' or address == '' or len(description) < 5:
         return "Invalid inputs passed, please check your data.", 422
 
-    coordinates=location(address)
+    coordinates = location(address)
     print(coordinates)
     latitude = coordinates['lat']
     longitude = coordinates['lng']
@@ -196,7 +193,7 @@ def createPlace():
     }
     with CursorFromConnectionFromPool() as cursor:
         cursor.execute('select * from users where userid=%s', (user_id, ))
-        user=cursor.fetchone()
+        user = cursor.fetchone()
     if not user:
         return "Could not find user for provided id", 404
 
@@ -209,7 +206,7 @@ def createPlace():
 
 @app.route('/api/places/<string:pid>', methods=['PATCH'])
 @cross_origin()
-def updatePlace(pid):
+def update_place(pid):
     title=request.json['title']
     description = request.json['description']
 
@@ -238,7 +235,7 @@ def updatePlace(pid):
 
 @app.route('/api/places/<string:pid>', methods=['DELETE'])
 @cross_origin()
-def deletePlace(pid):
+def delete_place(pid):
     with CursorFromConnectionFromPool() as cursor:
         cursor.execute('select * from places where placeid = %s', (pid,))
         place_by_id = cursor.fetchone()
@@ -257,7 +254,6 @@ def deletePlace(pid):
         cursor.execute('delete from places where userid = %s', (user_id,))
 
     return jsonify({'message': 'Deleted place'})
-
 
 
 if __name__ == "__main__":
