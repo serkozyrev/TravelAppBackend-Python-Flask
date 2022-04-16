@@ -1,6 +1,9 @@
-from flask import Flask, request, jsonify
+import base64
+
+from flask import Flask, request, jsonify, send_from_directory
 import jwt
 import os
+import uuid
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from database import Database
@@ -10,21 +13,36 @@ import bcrypt
 from email_validator import validate_email, EmailNotValidError
 from location import location
 from checkAuth import auth
+from werkzeug.utils import secure_filename
 
 load_dotenv()
 DB_PWD = os.getenv('DB_PWD')
 DB_USER = os.getenv('DB_USER')
 DB_HOST = os.getenv('DB_HOST')
 
+UPLOAD_FOLDER = './uploads/images'
+ALLOWED_EXTENSIONS={'jpeg', 'png', 'jpg'}
 jwtsecret = os.getenv('jwtsecret')
 DB = os.getenv('DB')
-app = Flask(__name__)
+app = Flask(__name__, static_folder=UPLOAD_FOLDER)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 CORS(app)
 Database.initialize(user=f'{DB_USER}',
                     password=f'{DB_PWD}',
                     host=f'{DB_HOST}',
                     port=5432,
                     database=f'{DB}')
+
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def render_picture(data):
+    data=data.encode('utf8')
+    render_pic = base64.b64encode(data).decode('ascii')
+    return render_pic
 
 
 @app.route('/api/users/', methods=['GET'])
@@ -34,13 +52,26 @@ def get_users():
         cursor.execute('select * from users')
         users = cursor.fetchall()
     user_list = []
-
     for user in users:
         user_tuple_list = list(user)
         user_tuple_list.remove(user_tuple_list[3])
         with CursorFromConnectionFromPool() as cursor:
             cursor.execute('select count(*) from places where userid = %s', (user_tuple_list[0], ))
             user_places_count = cursor.fetchone()
+        # if user_tuple_list[3] is not None:
+        #     image = render_picture(user_tuple_list[3])
+        #     user_new = {
+        #         'id': user_tuple_list[0], 'image': image,
+        #         'name': user_tuple_list[1], 'places': user_places_count
+        #     }
+        # else:
+        #     user_new = {
+        #         'id': user_tuple_list[0], 'image': user_tuple_list[3],
+        #         'name': user_tuple_list[1], 'places': user_places_count
+        #     }
+        # print(user_tuple_list[3][6:])
+        # image_file = send_from_directory(UPLOAD_FOLDER, '/'+user_tuple_list[3][7:])
+        # print(image_file)
         user_new = {
             'id': user_tuple_list[0], 'image': user_tuple_list[3],
             'name': user_tuple_list[1], 'places': user_places_count
@@ -50,12 +81,20 @@ def get_users():
     return {'users': user_list}
 
 
+@app.route('/uploads/<path:filename>')
+@cross_origin()
+def return_file(filename):
+    print(filename[6:])
+    return send_from_directory(UPLOAD_FOLDER, '/'+filename)
+
 @app.route('/api/users/signup', methods=['POST'])
 @cross_origin()
 def signup():
     name = request.form['name']
     email = request.form['email']
     password = request.form['password'].encode('utf8')
+    file = request.files.get('image')
+    binary_file = file.read()
     email_error = ''
     valid = ''
     try:
@@ -71,7 +110,23 @@ def signup():
     elif len(password) < 6:
         return "Password length should be 6 or more characters", 422
     else:
-
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+            file_list = filename.split('.')
+            file_name = uuid.uuid5(uuid.NAMESPACE_DNS,file_list[0]).hex
+            print(name)
+            file_list[0] = file_name
+            print(file_list)
+            new_filename = '.'.join(file_list)
+            print(new_filename)
+            path=os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
+            file.save(path)
+            path_new=path[2:]
+            print(path)
+            real_path_name = os.path.abspath(path)
+            print(real_path_name)
+            file.filename = new_filename
+            print(file)
         with CursorFromConnectionFromPool() as cursor:
             cursor.execute('select * from users where email=%s', (email_norm,))
             users = cursor.fetchone()
@@ -82,8 +137,8 @@ def signup():
         hashed = bcrypt.hashpw(password, salt).decode('utf-8')
 
         with CursorFromConnectionFromPool() as cursor:
-            cursor.execute(f'insert into users(username, email, userpassword)'
-                           f'values(%s, %s, %s)', (name, email_norm, hashed))
+            cursor.execute(f'insert into users(username, email, userpassword, image)'
+                           f'values(%s, %s, %s, %s)', (name, email_norm, hashed, path_new))
         # dt = datetime.now() + timedelta(hours=1)
         with CursorFromConnectionFromPool() as cursor:
             cursor.execute('select * from users where email=%s', (email,))
