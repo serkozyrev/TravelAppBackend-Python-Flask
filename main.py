@@ -62,7 +62,6 @@ def get_users():
             'name': user_tuple_list[1], 'places': user_places_count,
             'image_type': user_tuple_list[4]
         }
-        print(user_new)
         # user_new = tuple(user_tuple_list)
         user_list.append(user_new)
     return {'users': user_list}
@@ -99,11 +98,8 @@ def signup():
             filename = secure_filename(file.filename)
             file_list = filename.split('.')
             file_name = uuid.uuid5(uuid.NAMESPACE_DNS,file_list[0]).hex
-            print(name)
             file_list[0] = file_name
-            print(file_list)
             new_filename = '.'.join(file_list)
-            print(new_filename)
             path=os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
             file.save(path)
 
@@ -194,7 +190,6 @@ def get_places_by_user_id(uid):
         return "Could not find a place for the provided user id.", 404
 
     places_list = []
-    print(places_by_user_id)
 
     for place_by_user_id in places_by_user_id:
         coordinates = {'lat': place_by_user_id[6], 'lng': place_by_user_id[7]}
@@ -227,7 +222,6 @@ def create_place():
         return "Invalid inputs passed, please check your data.", 422
 
     coordinates = location(address)
-    print(coordinates)
     latitude = coordinates['lat']
     longitude = coordinates['lng']
     created_place = {
