@@ -4,6 +4,7 @@ from flask import Flask, request, jsonify, send_from_directory
 import jwt
 import os
 import uuid
+import base64
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from database import Database
@@ -20,11 +21,11 @@ DB_PWD = os.getenv('DB_PWD')
 DB_USER = os.getenv('DB_USER')
 DB_HOST = os.getenv('DB_HOST')
 
-UPLOAD_FOLDER = './uploads/images'
+UPLOAD_FOLDER = 'uploads/images/'
 ALLOWED_EXTENSIONS={'jpeg', 'png', 'jpg'}
 jwtsecret = os.getenv('jwtsecret')
 DB = os.getenv('DB')
-app = Flask(__name__, static_folder=UPLOAD_FOLDER)
+app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 CORS(app)
 Database.initialize(user=f'{DB_USER}',
@@ -39,18 +40,15 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-def render_picture(data):
-    data=data.encode('utf8')
-    render_pic = base64.b64encode(data).decode('ascii')
-    return render_pic
-
-
 @app.route('/api/users/', methods=['GET'])
 @cross_origin()
 def get_users():
-    with CursorFromConnectionFromPool() as cursor:
-        cursor.execute('select * from users')
-        users = cursor.fetchall()
+    try:
+        with CursorFromConnectionFromPool() as cursor:
+            cursor.execute('select * from users')
+            users = cursor.fetchall()
+    except:
+        return{'message': 'Fetching users failed, please try again later'}
     user_list = []
     for user in users:
         user_tuple_list = list(user)
@@ -58,34 +56,17 @@ def get_users():
         with CursorFromConnectionFromPool() as cursor:
             cursor.execute('select count(*) from places where userid = %s', (user_tuple_list[0], ))
             user_places_count = cursor.fetchone()
-        # if user_tuple_list[3] is not None:
-        #     image = render_picture(user_tuple_list[3])
-        #     user_new = {
-        #         'id': user_tuple_list[0], 'image': image,
-        #         'name': user_tuple_list[1], 'places': user_places_count
-        #     }
-        # else:
-        #     user_new = {
-        #         'id': user_tuple_list[0], 'image': user_tuple_list[3],
-        #         'name': user_tuple_list[1], 'places': user_places_count
-        #     }
-        # print(user_tuple_list[3][6:])
-        # image_file = send_from_directory(UPLOAD_FOLDER, '/'+user_tuple_list[3][7:])
-        # print(image_file)
+
         user_new = {
             'id': user_tuple_list[0], 'image': user_tuple_list[3],
-            'name': user_tuple_list[1], 'places': user_places_count
+            'name': user_tuple_list[1], 'places': user_places_count,
+            'image_type': user_tuple_list[4]
         }
+        print(user_new)
         # user_new = tuple(user_tuple_list)
         user_list.append(user_new)
     return {'users': user_list}
 
-
-# @app.route('/uploads/<path:filename>')
-# @cross_origin()
-# def return_file(filename):
-#     print(filename[6:])
-#     return send_from_directory(UPLOAD_FOLDER, '/'+filename)
 
 @app.route('/api/users/signup', methods=['POST'])
 @cross_origin()
@@ -94,7 +75,10 @@ def signup():
     email = request.form['email']
     password = request.form['password'].encode('utf8')
     file = request.files.get('image')
-    binary_file = file.read()
+    binary_file = base64.b64encode(file.read())
+    binary_file_decode = binary_file.decode('utf8')
+    file_type = file.content_type
+
     email_error = ''
     valid = ''
     try:
@@ -105,10 +89,11 @@ def signup():
     except EmailNotValidError as e:
         # email is not valid, exception message is human-readable
         email_error = e
+        return {'message': email_error}
     if name == '' or valid is False or password == '' or email_error:
         return jsonify({'message': "Invalid inputs passed, please check your data."})
     elif len(password) < 6:
-        return "Password length should be 6 or more characters", 422
+        return {'message':"Password length should be 6 or more characters"}
     else:
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
@@ -121,24 +106,25 @@ def signup():
             print(new_filename)
             path=os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
             file.save(path)
-            path_new=path[2:]
-            print(path)
-            real_path_name = os.path.abspath(path)
-            print(real_path_name)
-            file.filename = new_filename
-            print(file)
-        with CursorFromConnectionFromPool() as cursor:
-            cursor.execute('select * from users where email=%s', (email_norm,))
-            users = cursor.fetchone()
+
+        try:
+            with CursorFromConnectionFromPool() as cursor:
+                cursor.execute('select * from users where email=%s', (email_norm,))
+                users = cursor.fetchone()
+        except:
+            return {'message': 'Signing up failed, please try again later'}
         if users:
-            return "Could not create user, email already exists", 422
+            return {'message':"Could not create user, email already exists"}
 
         salt = bcrypt.gensalt(10)
         hashed = bcrypt.hashpw(password, salt).decode('utf-8')
 
-        with CursorFromConnectionFromPool() as cursor:
-            cursor.execute(f'insert into users(username, email, userpassword, image)'
-                           f'values(%s, %s, %s, %s)', (name, email_norm, hashed, path_new))
+        try:
+            with CursorFromConnectionFromPool() as cursor:
+                cursor.execute(f'insert into users(username, email, userpassword, image, image_type)'
+                               f'values(%s, %s, %s, %s, %s)', (name, email_norm, hashed, binary_file_decode, file_type))
+        except:
+            return {"message": "Creating user failed, please try again"}
         # dt = datetime.now() + timedelta(hours=1)
         with CursorFromConnectionFromPool() as cursor:
             cursor.execute('select * from users where email=%s', (email,))
@@ -161,23 +147,23 @@ def login():
     with CursorFromConnectionFromPool() as cursor:
         cursor.execute('select * from users where email=%s', (email, ))
         identified_user = cursor.fetchone()
-        if identified_user is None:
-            return "Could not identify user, credentials seem to be wrong", 401
-        else:
-            user_id = identified_user[0]
-            password1 = identified_user[3].encode('utf8')
-            valid_password = bcrypt.checkpw(password, password1)
-        if not valid_password:
-            return 'Invalid credentials, could not log you in', 403
+    if identified_user is None:
+        return {'message':"Could not identify user, credentials seem to be wrong"}
+    else:
+        user_id = identified_user[0]
+        password1 = identified_user[3].encode('utf8')
+        valid_password = bcrypt.checkpw(password, password1)
+    if not valid_password:
+        return {'message':'Invalid credentials, could not log you in'}
 
-        # dt = datetime.now() + timedelta(hours=1)
-        payload = {
-            'exp': datetime.now() + timedelta(days=1),
-            'iat': datetime.now(),
-            'id': user_id
-        }
-        access_token = jwt.encode(payload, jwtsecret, algorithm="HS256")
-        return {'userId': identified_user[0], 'email': identified_user[2], 'token': access_token}
+    # dt = datetime.now() + timedelta(hours=1)
+    payload = {
+        'exp': datetime.now() + timedelta(days=1),
+        'iat': datetime.now(),
+        'id': user_id
+    }
+    access_token = jwt.encode(payload, jwtsecret, algorithm="HS256")
+    return {'userId': identified_user[0], 'email': identified_user[2], 'token': access_token}
 
 
 @app.route('/api/places/<string:pid>', methods=['GET'])
@@ -232,6 +218,10 @@ def create_place():
     user_id = auth(token)
     description = request.form['description']
     address = request.form['address']
+    file = request.files.get('image')
+    binary_file = base64.b64encode(file.read())
+    binary_file_decode = binary_file.decode('utf8')
+    file_type = file.content_type
 
     if title == '' or description == '' or address == '' or len(description) < 5:
         return "Invalid inputs passed, please check your data.", 422
@@ -251,9 +241,9 @@ def create_place():
         return "Could not find user for provided id", 404
 
     with CursorFromConnectionFromPool() as cursor:
-        cursor.execute('insert into places(title, description, address, userid, latitude, longitude)'
-                       ' values(%s, %s, %s, %s, %s, %s)',
-                       (title, description, address, user_id, latitude, longitude))
+        cursor.execute('insert into places(title, description, image, address, userid, latitude, longitude, image_type)'
+                       ' values(%s, %s, %s, %s, %s, %s, %s, %s)',
+                       (title, description, binary_file_decode, address, user_id, latitude, longitude, file_type))
     return jsonify({'place': created_place}, 201)
 
 
