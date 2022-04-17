@@ -81,11 +81,11 @@ def get_users():
     return {'users': user_list}
 
 
-@app.route('/uploads/<path:filename>')
-@cross_origin()
-def return_file(filename):
-    print(filename[6:])
-    return send_from_directory(UPLOAD_FOLDER, '/'+filename)
+# @app.route('/uploads/<path:filename>')
+# @cross_origin()
+# def return_file(filename):
+#     print(filename[6:])
+#     return send_from_directory(UPLOAD_FOLDER, '/'+filename)
 
 @app.route('/api/users/signup', methods=['POST'])
 @cross_origin()
