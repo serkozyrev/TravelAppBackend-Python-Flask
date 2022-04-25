@@ -170,7 +170,7 @@ def get_place_by_id(pid):
         cursor.execute('select * from places where placeid = %s', (pid,))
         place_by_id = cursor.fetchone()
     if not place_by_id:
-        return 'Could not find a place for the provided id', 404
+        return {'message':'Could not find a place for the provided id'}
 
     coordinates = {'lat': place_by_id[6], 'lng': place_by_id[7]}
     place_item = {
@@ -188,7 +188,7 @@ def get_places_by_user_id(uid):
         cursor.execute('select * from places where userid = %s', (uid,))
         places_by_user_id = cursor.fetchall()
     if not places_by_user_id:
-        return "Could not find a place for the provided user id.", 404
+        return {'message': "Could not find a place for the provided user id."}
 
     places_list = []
 
@@ -210,7 +210,7 @@ def create_place():
     title = request.form['title']
     token = request.headers['Authorization'].split(' ')[1]
     if token == '':
-        return 'Authorization failed'
+        return {'message':'Authorization failed'}
     user_id = auth(token)
     description = request.form['description']
     address = request.form['address']
@@ -220,7 +220,7 @@ def create_place():
     file_type = file.content_type
 
     if title == '' or description == '' or address == '' or len(description) < 5:
-        return "Invalid inputs passed, please check your data.", 422
+        return {'message':"Invalid inputs passed, please check your data."}
 
     coordinates = location(address)
     latitude = coordinates['lat']
@@ -233,7 +233,7 @@ def create_place():
         cursor.execute('select * from users where userid=%s', (user_id, ))
         user = cursor.fetchone()
     if not user:
-        return "Could not find user for provided id", 404
+        return {'message':"Could not find user for provided id"}
 
     with CursorFromConnectionFromPool() as cursor:
         cursor.execute('insert into places(title, description, image, address, userid, latitude, longitude, image_type)'
@@ -250,21 +250,21 @@ def update_place(pid):
     address = request.json['address']
 
     if title == "" or description == '':
-        return 'Invalid inputs passed, please check your data', 422
+        return {'message':'Invalid inputs passed, please check your data'}
 
     with CursorFromConnectionFromPool() as cursor:
         cursor.execute('select * from places where placeid = %s', (pid,))
         place_by_id = cursor.fetchone()
     if not place_by_id:
-        return 'Could not find a place for the provided id', 404
+        return {'message':'Could not find a place for the provided id'}
 
     token = request.headers['Authorization'].split(' ')[1]
     if token == '':
-        return 'Authorization failed'
+        return {'message':'Authorization failed'}
     user_id = auth(token)
 
     if place_by_id[5] != user_id:
-        return 'You are not allowed to update this place', 401
+        return {'message':'You are not allowed to update this place'}
 
     with CursorFromConnectionFromPool() as cursor:
         cursor.execute('update places set title=%s, description=%s, address=%s where placeid=%s',
@@ -280,15 +280,15 @@ def delete_place(pid):
         cursor.execute('select * from places where placeid = %s', (pid,))
         place_by_id = cursor.fetchone()
     if not place_by_id:
-        return 'Could not find a place for the provided id', 404
+        return {'message':'Could not find a place for the provided id'}
 
     token = request.headers['Authorization'].split(' ')[1]
     if token == '':
-        return 'Authorization failed'
+        return {'message':'Authorization failed'}
     user_id = auth(token)
 
     if place_by_id[5] != user_id:
-        return 'You are not allowed to delete this place', 401
+        return {'message':'You are not allowed to delete this place'}
 
     with CursorFromConnectionFromPool() as cursor:
         cursor.execute('delete from places where placeid = %s', (pid,))
