@@ -160,7 +160,7 @@ def login():
     }
     access_token = jwt.encode(payload, jwtsecret, algorithm="HS256")
     # print(type(access_token))
-    return jsonify({'userId': identified_user[0], 'email': identified_user[2], 'token': str(access_token)})
+    return jsonify({'userId': identified_user[0], 'email': identified_user[2], 'token': access_token})
 
 
 @app.route('/api/places/<string:pid>', methods=['GET'])
