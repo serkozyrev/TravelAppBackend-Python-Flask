@@ -158,7 +158,6 @@ def login():
         'iat': datetime.now(),
         'id': user_id
     }
-    print(type(jwtsecret))
     access_token = jwt.encode(payload, jwtsecret, algorithm="HS256")
     # print(type(access_token))
     return jsonify({'userId': identified_user[0], 'email': identified_user[2], 'token': access_token})
