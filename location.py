@@ -15,5 +15,6 @@ def location(address):
     data=response.json()
     lat_coord = data['data'][0]['latitude']
     lng_coord = data['data'][0]['longitude']
+    coords = {"lat": lat_coord, "lng": lng_coord}
 
     return {"lat": lat_coord, "lng": lng_coord}
